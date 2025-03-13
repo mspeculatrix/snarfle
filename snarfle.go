@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"snarfle/filelib"
 	"strings"
 )
 
@@ -23,46 +24,12 @@ const (
 
 var (
 	fileIn = ""
-	//cfg = make(map[string]string)
 )
-
-// Read a text file that contains simple key/item pairs (one per line)
-// separated by the string specified in the sep param.
-// Returns a map of type map[string]string.
-func ReadKVFile(filepath string, sep string) (map[string]string, error) {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	result := make(map[string]string)
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") { // Skip empty lines and comments
-			continue
-		}
-		elements := strings.SplitN(line, sep, 2)
-		if len(elements) == 2 {
-			key := strings.TrimSpace(elements[0])
-			item := strings.TrimSpace(elements[1])
-			result[key] = item
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
 
 func main() {
 	/** OPEN INPUT FILE **/
 
-	cfg, cfgErr := ReadKVFile("etc/settings.cfg", ":")
+	cfg, cfgErr := filelib.ReadConfig("snarfle.cfg")
 	if cfgErr != nil {
 		log.Fatal("Could not read config file.")
 	}
@@ -92,7 +59,7 @@ func main() {
 	defer fileOutH.Close() // ensure file gets closed
 
 	knownHosts := make(map[string]string)
-	localHosts, err := ReadKVFile("etc/localhosts.cfg", ":")
+	localHosts, err := filelib.ReadConfig("localhosts.cfg")
 	if err != nil {
 		log.Fatal("Couldn't read localhosts.cfg file.")
 	}
@@ -119,9 +86,9 @@ func main() {
 				if ipRegex.MatchString(item) { // It is!
 					//quads := strings.Split(item, ".")
 					//if quads[0] != "10" {
-					if strings.HasPrefix(item, "10.") {
+					if strings.HasPrefix(item, "10.") || strings.HasPrefix(item, "192.168") {
 						// This is a local address. Let's look whether it's
-						// in the localHosts map
+						// in the localHosts map. Doesn't deal with 172. private addresses
 						for dev, ip := range localHosts {
 							if ip == item {
 								item = dev
@@ -157,7 +124,7 @@ func main() {
 		switch outputFmt {
 		case "csv":
 			logline = strings.Join(newElements, ",")
-		case "log":
+		case "log", "txt":
 			logline = strings.Join(newElements, " ")
 		}
 		_, ferr := fileOutH.WriteString(logline + "\n")
